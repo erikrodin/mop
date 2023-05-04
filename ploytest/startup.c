@@ -214,7 +214,9 @@ void main(void)
     
     {
         draw_polygon( &pg1);
-        delay_milli(5);
+        delay_milli(500);
+		graphic_clear_screen();
+		delay_milli(500);
     }
-    graphic_clear_screen();
+    
 }
