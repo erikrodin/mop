@@ -1,0 +1,92 @@
+/*
+ * 	startup.c
+ *
+ */
+__attribute__((naked)) __attribute__((section (".start_section")) )
+void startup ( void )
+{
+__asm__ volatile(" LDR R0,=0x2001C000\n");		/* set stack */
+__asm__ volatile(" MOV SP,R0\n");
+__asm__ volatile(" BL main\n");					/* call main */
+__asm__ volatile(".L1: B .L1\n");				/* never return */
+}
+ #define PORT_D_BASE 0x40020C00
+  #define SCB_VTOR ((volatile unsigned int*) 0xE000ED08)
+  #define portD_Moder ((volatile unsigned int* ) (PORT_D_BASE))
+  #define portD_Otyper ((volatile unsigned short*) (PORT_D_BASE+0x4))
+  #define portD_Ospeedr ((volatile unsigned int* ) (PORT_D_BASE+0x8))
+  #define portD_Pupdr ((volatile unsigned int*) (PORT_D_BASE+0xC))
+  #define portD_Idr_LOW ((volatile unsigned char* ) (PORT_D_BASE+0x10))
+  #define GPIO_IDR_HIGH ((volatile unsigned char*) (PORT_D_BASE+0x11))
+  #define GPIO_ODR_LOW ((volatile unsigned char* ) (PORT_D_BASE+0x14))
+  #define GPIO_ODR_HIGH ((volatile unsigned char*) (PORT_D_BASE+0x15))
+  #define STK_CTRL ((volatile unsigned int *)(0xE000E010))
+  #define STK_LOAD  ((volatile unsigned int *)(0xE000E014))
+  #define STK_VAL ((volatile unsigned int *)(0xE000E018))
+
+#ifdef SIMULATOR
+#define DELAY_COUNT 100
+#else
+#define DELAY_COUNT 1000
+#endif
+
+
+
+static volatile int systick_flag;
+static volatile int delay_count;
+
+void systick_irq_handler( void )
+{
+
+    *STK_CTRL = 0;
+    delay_count-- ;
+    if( delay_count > 0 ) delay_1mikro();
+    
+    else systick_flag=1;
+ }
+void init_app(void)
+{
+ 
+  *portD_Moder = 0x55005555;
+  *portD_Pupdr = 0x00AA0000;
+  *portD_Otyper = 0x00000000;
+  *SCB_VTOR = 0x2001C000;
+  *((void(**)(void)) 0x2001C03C) = systick_irq_handler;
+}
+void delay_1mikro( void )
+{
+
+    *STK_CTRL = 0;
+    *STK_LOAD = ( 168 - 1 );
+    *STK_VAL = 0;
+    *STK_CTRL = 7;
+    
+}
+
+void delay( unsigned int count )
+{
+    if( count == 0 ) return;
+    
+    delay_count = count;
+    systick_flag = 0;
+    delay_1mikro();
+    
+}
+void main(void)
+{
+    init_app();
+    *GPIO_ODR_LOW=0;
+    delay(DELAY_COUNT);
+    *GPIO_ODR_LOW=0xFF;
+    while(1)
+    {
+        if (systick_flag)
+        {
+            break;
+        }
+        
+    }
+    
+    *GPIO_ODR_LOW = 0;
+}
+
