@@ -423,10 +423,11 @@ void draw_spindelobject(POBJECT o )
         y=o->geo->px[p].y + o->posy;
         graphic_pixel_set(x,y);
         
+		
     }
 }
 
-int objects_overlap(POBJECT o1, POBJECT o2)
+int pixel_overlap(POBJECT o1, POBJECT o2)
 {    
     int k=0;
     {
@@ -447,7 +448,23 @@ int objects_overlap(POBJECT o1, POBJECT o2)
     }
 }
 
-
+int objects_contact( POBJECT o1, POBJECT o2)
+{
+	int o2x0 = o2->posx;
+    int o2y0 = o2->posy;
+    int o2x1 = o2->posx + o2->geo->sizex;
+    int o2y1 = o2->posy + o2->geo->sizey;
+    int o1x0 = o1->posx;
+    int o1y0 = o1->posy;
+    int o1x1 = o1->posx + o1->geo->sizex;
+    int o1y1 = o1->posy + o1->geo->sizey;
+    
+    int ovlp_x = o2x0 <= o1x1 && o2x1 >= o1x0;
+    int ovlp_y = o2y0 <= o1y1 && o2y1 >= o1y0;
+    
+    return (ovlp_x && ovlp_y);
+	
+}
 void move_spindelobject(POBJECT o)
 {
     clear_spindelobject(o);
@@ -548,7 +565,14 @@ int main(int argc, char **argv)
  default: 
  creature->set_speed( creature, 0, 0); break; 
  } 
- if( objects_overlap( victim, creature )==13) 
+ if(creature -> posx < 1 || creature -> posx > 122 || creature -> posy < 1 || creature -> posy > 57){
+			break;
+	}
+	
+ if (objects_contact(victim, creature)){
+	 break;
+ }
+ if( pixel_overlap( victim, creature )==13) 
  { 
  // Game over 
  break; 
