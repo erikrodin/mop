@@ -220,12 +220,18 @@ void move_paddelobject(POBJECT o)
     o->posy = o->posy + o->diry;
     if((o->posy)<1)
     {
-        o->diry=-(o->diry);
+        o->diry=0;
+		o->posy=1;
     }
-    if ((o->posy + o->geo->sizey)>28)
+    if ((o->posy + o->geo->sizey)>64)
     {
-       o->diry=-(o->diry);
+       o->diry=0;
+	   o->posy=64 - o->geo->sizey;
     }
+	else{
+		o->diry=0;
+		
+	}
     draw_paddelobject(o);
 }
 
@@ -341,5 +347,6 @@ int main(void)
             case 2: t->set_speed( t, 0, 3); break; 
             case 8: t->set_speed( t, 0,-3); break; 
         }
+		
     }
 }
