@@ -228,7 +228,7 @@ typedef struct tObj{
     void (* set_speed ) (struct tObj *, int, int); /*sätt riktingsderivator för objektets rörelse */
 } OBJECT, *POBJECT;
 
-GEOMETRY ball_geometry ={
+GEOMETRY victim_geometry ={
     12, /*numpoints*/
     4,4, /*sizeX, sizeY*/
     {
@@ -261,7 +261,7 @@ void clear_object(POBJECT o){
     }
 }
 
-void move_ballobject(POBJECT o){
+void move_spiderobject(POBJECT o){
     clear_object(o);
     o->posx += o->drix;
 	o->posy += o->driy;
@@ -287,7 +287,7 @@ void move_ballobject(POBJECT o){
     (*o).posy = (*o).driy + (*o).posy;*/
     draw_object(o);
 }
-void move_happyface(POBJECT o){
+void move_victim(POBJECT o){
 	clear_object(o);
     o->posx += o->drix;
 	o->posy += o->driy;
@@ -326,33 +326,33 @@ int check_edge(POBJECT o){
 }
 
 
-static OBJECT ballobject1 = {
+static OBJECT spiderobject1 = {
     &spider_geometry,     /* geometri för en spindel */
     4,1,                /* initiala rektingskoord. */
     0,10,                /* initial startposition */
     draw_object,
     clear_object,
-    move_ballobject,
+    move_spiderobject,
     set_object_speed
 };
 
-static OBJECT ballobject2 ={
+static OBJECT spiderobject2 ={
     &spider_geometry,     /* geometri för en spindel */
     4,-1,                /* initiala rektingskoord. */
     70,10,                /* initial startposition */
     draw_object,
     clear_object,
-    move_ballobject,
+    move_spiderobject,
     set_object_speed
 };
 
-static	OBJECT happyFaceObejct={
-	&ball_geometry,
+static	OBJECT victimObejct={
+	&victim_geometry,
 	0,0,
 	50,10,
 	draw_object,
 	clear_object,
-	move_happyface,
+	move_victim,
 	set_object_speed
 	
 };
@@ -460,9 +460,9 @@ void main(int argc, char **argv){
 	int timepoints=48;
 	int timepoints2=48;
 	int timepoints3=48;
-    POBJECT b = &ballobject1;
-    POBJECT b2 = &ballobject2;
-	POBJECT hF = &happyFaceObejct;
+    POBJECT spider = &spiderobject1;
+    POBJECT spider2 = &spiderobject2;
+	POBJECT victim = &victimObejct;
     app_init();
     graphic_initalize();
     graphic_clear_screen();
@@ -476,8 +476,8 @@ void main(int argc, char **argv){
     }
     while(1){
 
-         if(square_overlap(hF,b)||square_overlap(hF,b2)){
-            if(pixel_overlap(b,hF)||pixel_overlap(b2,hF)){
+         if(square_overlap(victim,spider)||square_overlap(victim,spider2)){
+            if(pixel_overlap(spider,victim)||pixel_overlap(spider2,victim)){
               ascii_gotoxy(1,1);
               char end[] = "Game over";
               asc = end;
@@ -488,7 +488,7 @@ void main(int argc, char **argv){
             }
 			
          }
-         if(check_edge(hF)){
+         if(check_edge(victim)){
 			ascii_gotoxy(1,1);
               char end[] = "Game over";
               asc = end;
@@ -521,21 +521,21 @@ void main(int argc, char **argv){
 		*asc = row2;
 		ascii_write_char(*asc);
 //		timecount(&time, &timepoints, &timepoints2);
-        hF->move(hF);
-        b->move(b);
-        b2->move(b2);
+        victim->move(victim);
+        spider->move(spider);
+        spider2->move(spider2);
         delay_milli(500);
         c = keyb();
 		
         switch( c ){
 			
-            case 6: hF->set_speed( hF, 2, 0); break;
-            case 4: hF->set_speed( hF, -2, 0); break;
-			case 5: hF->set_speed( hF, 0, 0); break;
-			case 2: hF->set_speed( hF, 0, -2); break;
-			case 8: hF->set_speed( hF, 0, 2); break;
-            case 9: /*reset*/ hF->clear(hF); b->clear(b); b2->clear(b2); hF->posx = 10; hF->posy = 10; b->posx=50; b->posy=20; b2->posx=90; b2->posy=90; hF->drix = 0; hF->driy = 0; break;
-		default: hF->set_speed( hF, 0, 0); break;
+            case 6: victim->set_speed( victim, 2, 0); break;
+            case 4: victim->set_speed( victim, -2, 0); break;
+			case 5: victim->set_speed( victim, 0, 0); break;
+			case 2: victim->set_speed( victim, 0, -2); break;
+			case 8: victim->set_speed( victim, 0, 2); break;
+            case 9: /*reset*/ victim->clear(victim); spider->clear(spider); spider2->clear(spider2); victim->posx = 10; victim->posy = 10; spider->posx=50; spider->posy=20; spider2->posx=90; spider2->posy=90; victim->drix = 0; victim->driy = 0; break;
+		default: victim->set_speed( victim, 0, 0); break;
 			
         }
 		
