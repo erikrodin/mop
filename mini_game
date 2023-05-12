@@ -489,8 +489,13 @@ void main(int argc, char **argv){
 			
          }
          if(check_edge(hF)){
-			
-            break;
+			ascii_gotoxy(1,1);
+              char end[] = "Game over";
+              asc = end;
+              while(*asc){
+                  ascii_write_char(*asc++);
+              }
+              break;
         }
 			time++;
         if(time==10){
@@ -533,6 +538,7 @@ void main(int argc, char **argv){
 		default: hF->set_speed( hF, 0, 0); break;
 			
         }
+		
 		
          delay_milli(20);
         }
