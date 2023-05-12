@@ -1,0 +1,532 @@
+/*
+ * 	startup.c
+ *
+ */
+ #include <stdio.h>
+
+__attribute__((naked)) __attribute__((section (".start_section")) )
+void startup ( void )
+{
+__asm__ volatile(" LDR R0,=0x2001C000\n");		/* set stack */
+__asm__ volatile(" MOV SP,R0\n");
+__asm__ volatile(" BL main\n");					/* call main */
+__asm__ volatile(".L1: B .L1\n");				/* never return */
+
+/*SYS-register*/
+#define	STK_CTRL	((volatile unsigned int *)(0xE000E010))
+#define	STK_LOAD	((volatile unsigned int *)(0xE000E014))
+#define	STK_VAL		((volatile unsigned int *)(0xE000E018))
+#define SIMULATOR /*kommenteras bort om man använder hårdvara*/
+
+#define GIPO_D 0x40020C00
+#define GIPO_MODER ((volatile unsigned int *)(GIPO_D)) 
+#define GIPO_OTYPER ((volatile unsigned short *)(GIPO_D+4))
+#define GIPO_PUPDR ((volatile unsigned int *)(GIPO_D+0xC))
+#define GIPO_IDR_HIGH ((volatile unsigned char *)(GIPO_D+0x11)) /*övre input*/
+#define GIPO_ODR_LOW ((volatile unsigned char *)(GIPO_D+0x14))  /*nedre utskrivningsport */
+#define GIPO_ODR_HIGH ((volatile unsigned char *)(GIPO_D+0x15)) /*övre utskrivningsport */
+
+#define PORT_BASE 0x40021000
+/*word adresser för initieringar*/
+#define portModer   ((volatile unsigned int *)(PORT_BASE))
+#define portOtyper  ((volatile unsigned short *)(PORT_BASE+0x4))
+#define portOspeedr ((volatile unsigned int *)(PORT_BASE+0x8)) 
+#define portPupdr   ((volatile unsigned int *)(PORT_BASE+0xC)
+/*byte adresser för data och styrregister*/
+#define portIdrLow  ((volatile unsigned char *)(PORT_BASE+0x10))
+#define portIdrHigh ((volatile unsigned char *)(PORT_BASE+0x11))
+#define portOdrLow  ((volatile unsigned char *)(PORT_BASE+0x14))
+#define portOdrHigh ((volatile unsigned char *)(PORT_BASE+0x15))
+
+/*För styrregister*/
+#define B_E         0x40    /*Enable signal*/
+#define B_SELECT    4       /*val av ASCII-display*/
+#define B_RW        2       /*0=write, 1=read*/
+#define B_RS        1       /*0=control, 1=data*/
+
+}
+
+__attribute__((naked))
+void graphic_initalize(void){
+    __asm volatile (" .HWORD 0xDFF0\n");
+    __asm volatile (" BX LR\n");
+}
+
+__attribute__((naked))
+void graphic_pixel_set( int x, int y){
+    __asm volatile (" .HWORD 0xDFF2\n");
+    __asm volatile (" BX LR\n");
+}
+
+__attribute__((naked))
+void graphic_clear_screen(void){
+    __asm volatile (" .HWORD 0xDFF1\n");
+    __asm volatile (" BX LR\n");
+}
+
+__attribute__((naked))
+void graphic_pixel_clear( int x, int y){
+    __asm volatile (" .HWORD 0xDFF3\n");
+    __asm volatile (" BX LR\n");
+}
+
+void ascii_ctrl_bit_set(unsigned char x){ /*Ettställer en eller flera bitar i styrregistret*/
+    char c;
+    c = *portOdrLow;
+    *portOdrLow = B_SELECT | x | c;
+}
+
+void ascii_ctrl_bit_clear(unsigned char x){ /*Nollställer en eller flera bitar i styrregistret*/
+    char c;
+    c = *portOdrLow;
+    c = c & ~x;
+    *portOdrLow = B_SELECT | c;
+}
+
+void ascii_write_cmd(unsigned char command){ 
+    ascii_ctrl_bit_clear(B_RS);
+    ascii_ctrl_bit_clear(B_RW);
+    ascii_write_controller(command);
+}
+
+void ascii_write_data(unsigned char data){
+    ascii_ctrl_bit_set(B_RS);
+    ascii_ctrl_bit_clear(B_RW);
+    ascii_write_controller(data);
+}
+
+
+void ascii_write_controller(unsigned char byte){
+     ascii_ctrl_bit_set(B_E); /*sätter E till 1*/
+     *portOdrHigh = byte;       /*Argument sätts till Output register*/
+     delay_250ns();
+     ascii_ctrl_bit_clear(B_E); /*Nollställer E*/
+}
+void ascii_mes(char test[]){
+	
+}
+unsigned char ascii_read_controller(void){
+    char c;
+    ascii_ctrl_bit_set(B_E); /*Sätter E till 1*/
+    delay_250ns();      /*Fördröjning*/
+    delay_250ns();
+    
+    c = *portIdrHigh;       /*Läser vad som står på ascii och sparar i C */
+    ascii_ctrl_bit_clear(B_E); /*Sätter E till 0*/
+    return c;
+}
+unsigned char ascii_read_status(void){
+    char c;
+    
+    *portModer = 0x00005555;     /*sätter portE bit 15-8 som ingångar*/
+    ascii_ctrl_bit_set(B_RW);    /*RS = 1*/
+    ascii_ctrl_bit_clear(B_RS);  /*RW = 0*/
+    c = ascii_read_controller(); 
+    *portModer = 0x55555555;     /*sätter portE but 15-8 som utgångar*/
+    return c;
+}
+
+unsigned char ascii_read_data(void){
+    char c;
+    
+    *portModer = 0x00005555; /*sätter portE bit 15-8 som ingångar*/
+    ascii_ctrl_bit_set(B_RS); /*RS = 1*/
+    ascii_ctrl_bit_set(B_RW);   /*RW = 1*/
+    c = ascii_read_controller();
+    *portModer = 0x55555555;    /*sätter portE but 15-8 som utgångar*/
+    return c;
+}
+void ascii_init(void){
+    while( (ascii_read_status() & 0x80)==0x80); /*Vänta till den är redo att ta emot*/
+        delay_micro(8);
+        ascii_write_cmd(0x38); /*Function set*/
+        delay_micro(39);        /*execution time*/
+        
+        ascii_write_cmd(0xE); /*Display control*/
+        delay_micro(39);
+        
+        ascii_write_cmd(1); /*Clear Display*/
+        delay_milli(2);
+        
+        ascii_write_cmd(0x6); /*Entry Mode*/
+        delay_micro(39);
+    
+}
+
+void ascii_gotoxy(int row, int column){ /*Placerar markören i (x,y) positionen*/
+    int address;
+    address = row-1;
+    if (column == 2){
+        address = address + 0x40;
+    }
+    ascii_write_cmd(0x80 | address);
+}
+
+void ascii_write_char(unsigned char c){ /*Skriver c till displayen*/
+    while( ( ascii_read_status() & 0x80)== 0x80);
+    delay_micro(8);
+    ascii_write_data(c);
+    delay_micro(43);
+}
+
+void delay_250ns(void){
+	*STK_CTRL = 0;
+	*STK_LOAD = ( (168/4) -1 );//168=1mikro sekund /4 ger 250 ns och -1 för omslaget
+	*STK_VAL = 0;
+	*STK_CTRL = 5;//sätter clksource till system klocka bit 0 till enable
+	while((*STK_CTRL & 0x10000) == 0); /*Väntar tills controll registret räknat ner till noll*/
+	*STK_CTRL = 0;
+}
+
+
+
+void delay_micro(unsigned int us)
+{
+	#ifdef	SIMULATOR
+			us=us/1000;
+			us++;
+	#endif
+		while(us>0)
+		{
+			delay_250ns();
+			delay_250ns();
+			delay_250ns();
+			delay_250ns();
+			us--;
+		}
+}
+void delay_milli(unsigned int ms){
+#ifdef SIMULATOR
+	ms = ms/1000;
+	ms++;
+#endif
+	while(ms>0){
+        delay_micro(1000);
+        ms--;
+	}
+}
+
+typedef struct{
+    char x,y;
+}POINT, *PPOINT;
+
+#define MAX_POINTS 70
+typedef struct{
+    int numpoints;
+    int sizex;
+    int sizey;
+    POINT px[ MAX_POINTS ];
+} GEOMETRY, *PGEOMETRY;
+
+typedef struct tObj{
+    PGEOMETRY geo;
+    int drix, driy;
+    int posx, posy;
+    void (* draw ) (struct tObj *); /*rita upp objecter i position x,y */
+    void (* clear ) (struct tObj *); /*radera object */
+    void (* move ) (struct tObj *); /*flytta object, mest omfattande operationen */
+    void (* set_speed ) (struct tObj *, int, int); /*sätt riktingsderivator för objektets rörelse */
+} OBJECT, *POBJECT;
+
+GEOMETRY ball_geometry ={
+    12, /*numpoints*/
+    4,4, /*sizeX, sizeY*/
+    {
+        /* px[0,1,2 ...]*/
+    {0,1},{0,2},{1,0},{1,1},{1,2},{1,3},{2,0},{2,1},{2,2},{2,3},{3,1},{3,2}    
+    }
+};
+GEOMETRY spider_geometry =
+{
+    22,
+    6,8,
+    {
+        {2,0},{3,0},{1,1},{4,1},{0,2},{1,2},{2,2},{3,2},{4,2},{5,2},{0,3},
+        {2,3},{3,3},{5,3},{1,4},{4,4},{2,5},{3,5},{1,6},{4,6},{0,7},{5,7}
+    }
+};
+void draw_object(POBJECT o){
+    for(int i = 0; i<(*o).geo->numpoints; i++){
+        /*o--> geo --> listan px med index i --> x position*/
+        //graphic_pixel_set((*o).geo->px[i].x,(*o).geo->px[i].y);
+        graphic_pixel_set((*o).geo->px[i].x + o->posx,(*o).geo->px[i].y + o->posy);
+    }
+}
+
+
+void clear_object(POBJECT o){
+    for(int i = 0; i<(*o).geo->numpoints; i++){
+        //graphic_pixel_clear((*o).geo->px[i].x,(*o).geo->px[i].y);
+        graphic_pixel_clear((*o).geo->px[i].x + o->posx,(*o).geo->px[i].y + o->posy);
+    }
+}
+
+void move_ballobject(POBJECT o){
+    clear_object(o);
+    o->posx += o->drix;
+	o->posy += o->driy;
+    if((*o).posx < 1){ /*Betyder att bollen är påväg över kanten vänster, byt rikting*/
+        (*o).drix = (*o).drix * (-1); /* multiplicerar med -1 för att få motsatt rikting*/
+    }
+	 if ( (*o).posx > 124){ /*bollen är påväg över höger kant*/
+        (*o).drix = (*o).drix * (-1);
+    }
+    
+    if ((*o).posy < 1){ /*Bollen är påväg över översta kanten*/
+        (*o).driy = (*o).driy * (-1);
+    }
+    if ((*o).posy > 60){
+        (*o).driy = (*o).driy * (-1);
+    }
+    
+    /*for(int q=0; q<(*o).geo->numpoints; q++){
+        (*o).geo->px[q].x += (*o).drix;
+        (*o).geo->px[q].y += (*o).driy;
+    }
+    (*o).posx = (*o).drix + (*o).posx;
+    (*o).posy = (*o).driy + (*o).posy;*/
+    draw_object(o);
+}
+void move_happyface(POBJECT o){
+	clear_object(o);
+    o->posx += o->drix;
+	o->posy += o->driy;
+	/* for(int q=0; q<(*o).geo->numpoints; q++){
+        (*o).geo->px[q].x += (*o).drix;
+        (*o).geo->px[q].y += (*o).driy;
+    }
+    (*o).posx = (*o).drix + (*o).posx;
+    (*o).posy = (*o).driy + (*o).posy;*/
+    draw_object(o);
+}
+void set_object_speed(POBJECT o, int speedx, int speedy){
+    (*o).drix = speedx;
+    (*o).driy = speedy;
+}
+
+int check_edge(POBJECT o){
+    if((*o).posx < 1){ /*Betyder att bollen är påväg över kanten vänster, byt rikting*/
+        return 1; /* multiplicerar med -1 för att få motsatt rikting*/
+    }
+	 if ( (*o).posx > 124){ /*bollen är påväg över höger kant*/
+        return 1;
+    }
+    
+    if ((*o).posy < 1){ /*Bollen är påväg över översta kanten*/
+        return 1;
+    }
+    if ((*o).posy > 60){
+        return 1;
+    }
+    return 0;
+}
+
+
+static OBJECT ballobject1 = {
+    &ball_geometry,     /* geometri för en boll */
+    4,1,                /* initiala rektingskoord. */
+    0,10,                /* initial startposition */
+    draw_object,
+    clear_object,
+    move_ballobject,
+    set_object_speed
+};
+
+static OBJECT ballobject2 ={
+    &ball_geometry,     /* geometri för en boll */
+    4,-1,                /* initiala rektingskoord. */
+    70,10,                /* initial startposition */
+    draw_object,
+    clear_object,
+    move_ballobject,
+    set_object_speed
+};
+
+static	OBJECT happyFaceObejct={
+	&spider_geometry,
+	0,0,
+	50,10,
+	draw_object,
+	clear_object,
+	move_happyface,
+	set_object_speed
+	
+};
+
+void app_init(void){
+    *GIPO_MODER &= 0x00000000; /*Reset bit 31-16      Part of exercise 4.1*/
+    *GIPO_MODER |= 0x55005555; /*Config bit 31-16 to "01-00" */
+    
+    *GIPO_OTYPER &= 0x0FFF; /*Reset 11-0 and set bit 15-12 to 0 */
+    
+    *GIPO_PUPDR &= 0x0000FFFF; /*Reset bit 31-16 */
+    *GIPO_PUPDR |= 0x00AA0000; /*Set bit 31-24 to 0 and bit 23-16 to A... "10"*/
+    *portModer = 0x55555555; /*initiering av port E, sätter port E0-7 och E8-15*/
+}
+
+void ActivateRow (unsigned int row){ /*aktiverar agiven rad hos tangentbordet eller deaktiverar samtliga*/
+    switch(row){
+        case 1: *GIPO_ODR_HIGH = 0x10; break;
+        case 2: *GIPO_ODR_HIGH = 0x20; break;
+        case 3: *GIPO_ODR_HIGH = 0x40; break;
+        case 4: *GIPO_ODR_HIGH = 0x80; break;
+        case 5: *GIPO_ODR_HIGH = 0x00; break; /*Deaktiverar samtliga*/
+    }
+}
+
+int pixel_overlap(POBJECT o1, POBJECT o2) {
+  int offset1x = o1->posx;
+  int offset1y = o1->posy;
+  int offset2x = o2->posx;
+  int offset2y = o2->posy;
+  for (int i = 0; i < o1->geo->numpoints; i++) {
+    for (int j = 0; j < o2->geo->numpoints; j++)
+      if ((offset1x + o1->geo->px[i].x == offset2x + o2->geo->px[j].x) &&
+	(offset1y + o1->geo->px[i].y == offset2y + o2->geo->px[j].y)) return 1;
+  }
+  return 0;
+}
+
+int ReadColumn(void){
+    /*Om någon tanget i den aktiveade raden är nedtryckt
+     * retunera dess kolonn nummer annars retunera 0 */
+     unsigned char c;
+     c = *GIPO_IDR_HIGH;
+     if (c&0x8) return 4;
+     if (c&0x4) return 3;
+     if (c&0x2) return 2;
+     if (c&0x1) return 1;
+     return 0;  
+}
+
+unsigned char keyb(void){ /*Värderna för bordet*/
+    unsigned char key[]={1,2,3,0xA,4,5,6,0xB,7,8,9,0xC,0xE,0,0xF,0xD};
+    int row, col;
+    for (row=1; row <=4; row++){
+        ActivateRow(row);
+        if((col = ReadColumn())){
+            
+            ActivateRow(0); /*Reset row*/
+            return key [4*(row-1)+(col-1)];
+        }
+    }
+    ActivateRow(0);
+    return 0xFF;
+    
+}
+int square_overlap(POBJECT p, POBJECT s) {
+	int maxbollx = p->posx;
+	int maxbolly = p->posy;
+	int maxManX = s->posx;
+	int maxManY = s->posy;
+
+	if(((abs(maxbollx-maxManX) <= 4) && 
+	(abs(maxbolly-maxManY) <= 4)))
+		{ 
+		return 1;
+}
+return 0;
+}
+int timecount(int *time,int *timepoints,int *timepoints2){
+	char *asc;
+		    *time++;
+        if(*time==10){
+			*timepoints++;
+			*time=0;
+			char row2 = *timepoints;
+			ascii_gotoxy(2,2);
+			*asc = row2;
+			ascii_write_char(*asc);
+		}
+		if(*timepoints==56){
+			*timepoints=*timepoints-10;
+			*timepoints2++;
+			char row2 = *timepoints2;
+			ascii_gotoxy(1,2);
+			*asc = row2;
+			ascii_write_char(*asc);
+		}
+		
+}
+	   
+
+void main(int argc, char **argv){
+    char c;
+	int time=0;
+	int timepoints=48;
+	int timepoints2=48;
+	int timepoints3=48;
+    POBJECT b = &ballobject1;
+    POBJECT b2 = &ballobject2;
+	POBJECT hF = &happyFaceObejct;
+    app_init();
+    graphic_initalize();
+    graphic_clear_screen();
+    char *asc;
+    char row1[] = "Game";
+    ascii_init();
+    ascii_gotoxy(1,1);
+    asc = row1;
+    while(*asc){
+        ascii_write_char(*asc++);
+    }
+    while(1){
+
+         if(square_overlap(hF,b)||square_overlap(hF,b2)){
+            if(pixel_overlap(b,hF)||pixel_overlap(b2,hF)){
+              ascii_gotoxy(1,1);
+              char end[] = "Game over";
+              asc = end;
+              while(*asc){
+                  ascii_write_char(*asc++);
+              }
+              break;
+            }
+         }
+         if(check_edge(hF)){
+            break;
+        }
+			time++;
+        if(time==10){
+			timepoints++;
+			time=0;
+		}
+		if(timepoints==58){
+			timepoints=timepoints-10;
+			timepoints2++;
+			char row2 = timepoints2;
+			ascii_gotoxy(1,2);
+			*asc = row2;
+			ascii_write_char(*asc);
+		}
+		if(timepoints2==58){
+			timepoints2=timepoints2-10;
+			timepoints3++;
+			
+			
+		}
+		char row2 = timepoints;
+		ascii_gotoxy(2,2);
+		*asc = row2;
+		ascii_write_char(*asc);
+//		timecount(&time, &timepoints, &timepoints2);
+        hF->move(hF);
+        b->move(b);
+        b2->move(b2);
+        delay_milli(500);
+        c = keyb();
+        switch( c ){
+            case 6: hF->set_speed( hF, 2, 0); break;
+            case 4: hF->set_speed( hF, -2, 0); break;
+			case 5: hF->set_speed( hF, 0, 0); break;
+			case 2: hF->set_speed( hF, 0, -2); break;
+			case 8: hF->set_speed( hF, 0, 2); break;
+            case 9: /*reset*/ hF->clear(hF); b->clear(b); b2->clear(b2); hF->posx = 10; hF->posy = 10; b->posx=50; b->posy=20; b2->posx=90; b2->posy=90; hF->drix = 0; hF->driy = 0; break;
+			default: hF->set_speed( hF, 0, 0); break;
+        }
+		
+         delay_milli(20);
+        }
+		
+		
+    }
