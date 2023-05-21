@@ -348,9 +348,10 @@ static	OBJECT victimObejct={
 };
 
 void app_init(void){
-// starta klockor port D och E 
-*((unsigned long *) 0x40023830) = 0x18;
-
+	
+	// starta klockor port D och E 
+	*((unsigned long *) 0x40023830) = 0x18;
+	
     *GIPO_MODER &= 0x00000000; /*Reset bit 31-16      Part of exercise 4.1*/
     *GIPO_MODER |= 0x55005555; /*Config bit 31-16 to "01-00" */
     
